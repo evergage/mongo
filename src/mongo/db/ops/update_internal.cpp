@@ -85,8 +85,6 @@ namespace mongo {
             if ( ! _jsScope.isEmpty() ) {
                 _scope->init( &_jsScope );
             }
-            _scope->setObject( "obj", const_cast< BSONObj & >( obj ) );
-
 
             int err = _scope->invoke( _func , 0, &obj , 1000 * 60 , false );
             if ( err == -3 ) { // INVOKE_ERROR
