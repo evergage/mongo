@@ -86,7 +86,7 @@ namespace mongo {
                 _scope->init( &_jsScope );
             }
 
-            int err = _scope->invoke( _func , 0, &obj , 1000 * 60 , false );
+            int err = _scope->invoke( _func , 0, &obj , 1000 * 60 , false, true, true );
             if ( err == -3 ) { // INVOKE_ERROR
                 stringstream ss;
                 ss << "error on invocation of $set function:\n"
