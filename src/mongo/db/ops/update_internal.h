@@ -30,6 +30,8 @@ namespace mongo {
     class ModState;
     class ModSetState;
 
+    class ValueEvaluator; // used for javascript value evaluation in sets
+
     /* Used for modifiers such as $inc, $set, $push, ...
      * stores the info about a single operation
      * once created should never be modified
@@ -56,6 +58,7 @@ namespace mongo {
 
         BSONElement elt; // x:5 note: this is the actual element from the updateobj
         boost::shared_ptr<Matcher> matcher;
+        boost::shared_ptr<ValueEvaluator> valueEvaluator;
         bool matcherOnPrimitive;
 
         void init( Op o , BSONElement& e , bool forReplication ) {
@@ -256,6 +259,10 @@ namespace mongo {
         const char* renameFrom() const {
             massert( 13492, "mod must be RENAME_TO type", op == Mod::RENAME_TO );
             return elt.fieldName();
+        }
+
+        bool hasValueEvaluator() const {
+            return valueEvaluator.get();
         }
     };
 
@@ -473,6 +480,14 @@ namespace mongo {
 
         const char* fieldName() const {
             return m->fieldName;
+        }
+
+        const BSONElement & eltForSet() const {
+            if ( m->hasValueEvaluator() ) {
+                return newVal;
+            } else {
+                return m->elt;
+            }
         }
 
         bool DEPRECATED_needOpLogRewrite() const {
@@ -697,8 +712,8 @@ namespace mongo {
             case Mod::SET_ON_INSERT:
                 ms.fixedOpName = "$set";
             case Mod::SET: {
-                m._checkForAppending( m.elt );
-                b.appendAs( m.elt, m.shortFieldName );
+                m._checkForAppending( ms.eltForSet() );
+                b.appendAs( ms.eltForSet(), m.shortFieldName );
                 break;
             }
 

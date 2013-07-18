@@ -25,6 +25,7 @@
 #include "mongo/db/pdfile.h"
 #include "mongo/db/oplog.h"
 #include "mongo/util/mongoutils/str.h"
+#include "mongo/scripting/engine.h"
 
 #include "update_internal.h"
 
@@ -38,6 +39,81 @@ namespace mongo {
                                     "$setOnInsert"
                                   };
     unsigned Mod::modNamesNum = sizeof(Mod::modNames)/sizeof(char*);
+
+    // TODO: considering factoring out to a base class for evalutable javascript between this
+    // and matcher's Where
+    class ValueEvaluator : boost::noncopyable {
+    public:
+
+        ValueEvaluator( const string& ns ) {
+            _ns = ns;
+            _func = 0;
+            _initCalled = false;
+        }
+
+        ~ValueEvaluator() {
+            _func = 0;
+        }
+
+        void init() {
+            if ( _initCalled )
+                return;
+            _initCalled = true;
+
+            NamespaceString ns( _ns );
+            // TODO verify what pooled scope to use
+            _scope = globalScriptEngine->getPooledScope( ns.db.c_str(), "setFunc" );
+
+            massert( 16868 ,  "code has to be set first!" , ! _jsCode.empty() );
+
+            _func = _scope->createFunction( _jsCode.c_str() );
+        }
+
+        void setScope( const BSONObj& scope ) {
+            _jsScope = scope.copy();
+        }
+
+        void setCode( const string& code ) {
+            _jsCode = code;
+        }
+
+        BSONObj exec( const BSONObj& obj ) {
+            init();
+            // TODO better messages once the calling semantics are better determined
+            uassert( 16869 , "$set function compile error", _func != 0 );
+
+            if ( ! _jsScope.isEmpty() ) {
+                _scope->init( &_jsScope );
+            }
+            _scope->setObject( "obj", const_cast< BSONObj & >( obj ) );
+
+
+            int err = _scope->invoke( _func , 0, &obj , 1000 * 60 , false );
+            if ( err == -3 ) { // INVOKE_ERROR
+                stringstream ss;
+                ss << "error on invocation of $set function:\n"
+                   << _scope->getError();
+                uassert( 16870 , ss.str(), false);
+            }
+            else if ( err != 0 ) {   // ! INVOKE_SUCCESS
+                uassert( 16871 , "unknown error in invocation of $set function", false);
+            }
+
+        return _scope->getObject( "__returnValue" ).getOwned();
+        }
+
+    private:
+        bool _initCalled;
+
+        string _ns;
+
+        BSONObj _jsScope;
+        string _jsCode;
+
+        auto_ptr<Scope> _scope;
+        ScriptingFunction _func;
+
+    };
 
     bool Mod::_pullElementMatch( BSONElement& toMatch ) const {
 
@@ -118,8 +194,8 @@ namespace mongo {
             // Fall through.
 
         case SET: {
-            _checkForAppending( elt );
-            builder.appendAs( elt , shortFieldName );
+            _checkForAppending( ms.eltForSet() );
+            builder.appendAs( ms.eltForSet() , shortFieldName );
             break;
         }
 
@@ -590,6 +666,21 @@ namespace mongo {
                 continue;
             }
 
+            if ( m.op == Mod::SET && m.hasValueEvaluator() ) {
+                ms._objData = m.valueEvaluator->exec( obj );
+                ms.newVal = ms._objData.getField( "value" );
+
+                if ( ms.newVal.eoo() ) {
+                    // TODO: dontApply was labelled deprecated--figure out why
+                    ms.dontApply = true;
+                    DEBUGUPDATE( "\t\tset: Evaluated value missing 'value', so not applying: ["
+                            << ms._objData << "]\n" )
+                    continue;
+                }
+
+                DEBUGUPDATE( "\t\tset: Using evaluated value: [" << ms.newVal << "]\n" )
+            }
+
             if ( m.op != Mod::SET_ON_INSERT && e.eoo() ) {
                 mss->amIInPlacePossible( m.op == Mod::UNSET );
                 continue;
@@ -613,8 +704,10 @@ namespace mongo {
                 break;
 
             case Mod::SET:
-                mss->amIInPlacePossible( m.elt.type() == e.type() &&
-                                         m.elt.valuesize() == e.valuesize() );
+                DEBUGUPDATE( "\t\tset: Checking to see if inplace is possible using: [" << ms.newVal << "]\n" )
+                mss->amIInPlacePossible( ms.eltForSet().type() == e.type() &&
+                                         ms.eltForSet().valuesize() == e.valuesize() );
+                DEBUGUPDATE( "\t\tset: \t Answer is [" << mss->_inPlacePossible << "]\n" )
                 break;
 
             case Mod::SET_ON_INSERT:
@@ -789,10 +882,10 @@ namespace mongo {
         }
         else if ( forcePositional ) {
             string positionalField = str::stream() << m->fieldName << "." << position;
-            bb.appendAs( m->elt, positionalField.c_str() );
+            bb.appendAs( eltForSet(), positionalField.c_str() );
         }
         else {
-            bb.appendAs( m->elt , m->fieldName );
+            bb.appendAs( eltForSet() , m->fieldName );
         }
 
     }
@@ -892,9 +985,9 @@ namespace mongo {
 
             case Mod::SET:
                 if ( isOnDisk )
-                    BSONElementManipulator( m.old ).ReplaceTypeAndValue( m.m->elt );
+                    BSONElementManipulator( m.old ).ReplaceTypeAndValue( m.eltForSet() );
                 else
-                    BSONElementManipulator( m.old ).replaceTypeAndValue( m.m->elt );
+                    BSONElementManipulator( m.old ).replaceTypeAndValue( m.eltForSet() );
                 break;
 
             case Mod::SET_ON_INSERT:
@@ -1431,6 +1524,21 @@ namespace mongo {
                 m.init( op , f , forReplication );
                 m.setFieldName( f.fieldName() );
                 setIndexedStatus( m, idxKeys );
+
+                if ( op == Mod::SET && ( f.type() == Code || f.type() == CodeWScope )) {
+                    m.valueEvaluator.reset( new ValueEvaluator( cc().ns() ) );
+
+                    DEBUGUPDATE( "\t\tUsing value evaluator\n" )
+
+                    if ( f.type() == CodeWScope ) {
+                        m.valueEvaluator->setCode( f.codeWScopeCode() );
+                        m.valueEvaluator->setScope( BSONObj( f.codeWScopeScopeDataUnsafe() ) );
+                    }
+                    else {
+                        m.valueEvaluator->setCode( f.valuestr() );
+                    }
+                }
+
                 _mods[m.fieldName] = m;
 
                 DEBUGUPDATE( "\t\t " << fieldName << "\t" << m.fieldName << "\t" << _hasDynamicArray );
