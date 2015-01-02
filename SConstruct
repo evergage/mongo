@@ -719,8 +719,8 @@ if nix:
             env.Append( CCFLAGS=["-fno-builtin-memcmp"] ) # glibc's memcmp is faster than gcc's
 
     env.Append( CPPDEFINES=["_FILE_OFFSET_BITS=64"] )
-    env.Append( CXXFLAGS=["-Wnon-virtual-dtor", "-Woverloaded-virtual"] )
-    env.Append( LINKFLAGS=["-fPIC", "-pthread",  "-rdynamic"] )
+    env.Append( CXXFLAGS=["-Wnon-virtual-dtor", "-Woverloaded-virtual", "-stdlib=libstdc++"] )
+    env.Append( LINKFLAGS=["-fPIC", "-pthread",  "-rdynamic", "-stdlib=libstdc++"] )
     env.Append( LIBS=[] )
 
     #make scons colorgcc friendly
