@@ -18,12 +18,14 @@
 #include "db/pipeline/expression.h"
 
 #include <cstdio>
+#include "db/matcher.h"
 #include "db/jsobj.h"
 #include "db/pipeline/builder.h"
 #include "db/pipeline/document.h"
 #include "db/pipeline/expression_context.h"
 #include "db/pipeline/value.h"
 #include "util/mongoutils/str.h"
+#include "util/stringutils.h"
 
 namespace mongo {
     using namespace mongoutils;
@@ -201,6 +203,7 @@ namespace mongo {
         {"$dayOfWeek", ExpressionDayOfWeek::create, OpDesc::FIXED_COUNT, 1},
         {"$dayOfYear", ExpressionDayOfYear::create, OpDesc::FIXED_COUNT, 1},
         {"$divide", ExpressionDivide::create, OpDesc::FIXED_COUNT, 2},
+        // $elemMatch handled specially in parseExpression
         {"$eq", ExpressionCompare::createEq, OpDesc::FIXED_COUNT, 2},
         {"$gt", ExpressionCompare::createGt, OpDesc::FIXED_COUNT, 2},
         {"$gte", ExpressionCompare::createGte, OpDesc::FIXED_COUNT, 2},
@@ -234,6 +237,10 @@ namespace mongo {
 
         if (str::equals(pOpName, "$const")) {
             return ExpressionConstant::createFromBsonElement(pBsonElement);
+        }
+
+        if (str::equals(pOpName, "$elemMatch")) {
+            return ExpressionElemMatch::createFromBsonElement(pBsonElement);
         }
 
         OpDesc key;
@@ -1322,6 +1329,121 @@ namespace mongo {
         BSONObjBuilder objBuilder (pBuilder->subobjStart());
         documentToBson(&objBuilder, false);
         objBuilder.done();
+    }
+
+    /* --------------------- ExpressionElemMatch --------------------------- */
+
+    ExpressionElemMatch::~ExpressionElemMatch() {
+    }
+
+    intrusive_ptr<ExpressionElemMatch> ExpressionElemMatch::createFromBsonElement(
+        BSONElement *pBsonElement) {
+        uassert(18911, "$elemMatch requires a single-field object as input",
+                pBsonElement->isABSONObj() && pBsonElement->Obj().nFields() == 1);
+
+        BSONElement specElement(pBsonElement->Obj().firstElement());
+
+        if (specElement.fieldName()[0] != '$' || specElement.fieldNameSize() < 2) {
+            uasserted(18912, str::stream()
+                        << "$elemMatch singleton object requires a $ reference as field name, "
+                        << "instead has " << specElement.fieldName());
+        }
+
+        intrusive_ptr<ExpressionFieldPath> pFieldPath(
+            ExpressionFieldPath::create(removeFieldPrefix(specElement.fieldName())));
+
+        intrusive_ptr<ExpressionElemMatch> pEEM;
+
+        // Matchers against primitive values work against primitive values wrapped with "x".
+        BSONObj primitiveMatchObj(specElement.wrap("x"));
+
+        if (specElement.isABSONObj()) {
+            pEEM = new ExpressionElemMatch(pFieldPath, specElement.Obj(), primitiveMatchObj);
+        } else {
+            pEEM = new ExpressionElemMatch(pFieldPath, BSONObj(), primitiveMatchObj);
+        }
+
+        return pEEM;
+    }
+
+    ExpressionElemMatch::ExpressionElemMatch(intrusive_ptr<ExpressionFieldPath> pFieldPath,
+                                             const BSONObj &query,
+                                             const BSONObj &primitiveQuery) :
+        pFieldPath(pFieldPath), matcher(query), primitiveMatcher(primitiveQuery) {
+    }
+
+    intrusive_ptr<Expression> ExpressionElemMatch::optimize() {
+        // No optimization supported for these.
+        return intrusive_ptr<Expression>(this);
+    }
+
+    void ExpressionElemMatch::addDependencies(set<string>& deps, vector<string>* path) const {
+        pFieldPath->addDependencies(deps, path);
+    }
+
+    Value ExpressionElemMatch::evaluate(const Document& pDocument) const {
+        Value fieldValue(pFieldPath->evaluate(pDocument));
+
+        if (fieldValue.missing()) {
+            return Value();
+        }
+
+        // Never match on fields that are not actual arrays
+        if (fieldValue.getType() != Array) {
+            return Value();
+        }
+
+        const vector<Value> & array = fieldValue.getArray();
+
+        for (vector<Value>::const_iterator it = array.begin(); it != array.end(); ++it) {
+            bool usePrimitiveMatcher = false;
+
+            BSONObjBuilder objBuilder;
+            if (it->getType() == Object) {
+                it->getDocument().toBson(&objBuilder);
+            } else {
+                // Use "x" as a workaround for applying matchers against primitive values.
+                objBuilder << "x" << *it;
+                usePrimitiveMatcher = true;
+            }
+            BSONObj obj(objBuilder.done());
+
+            if (usePrimitiveMatcher && primitiveMatcher.matches(obj)) {
+                return *it;
+            }
+
+            if (!usePrimitiveMatcher && matcher.matches(obj)) {
+                return *it;
+            }
+        }
+
+        return Value();
+    }
+
+
+    void ExpressionElemMatch::addToBsonObj(BSONObjBuilder *pBuilder,
+                                          StringData fieldName,
+                                          bool requireExpression) const {
+        BSONObjBuilder elemMatchBuilder (pBuilder->subobjStart(fieldName));
+        addElemMatchBson(elemMatchBuilder);
+    }
+
+    void ExpressionElemMatch::addToBsonArray(BSONArrayBuilder *pBuilder) const {
+        BSONObjBuilder elemMatchBuilder (pBuilder->subobjStart());
+        addElemMatchBson(elemMatchBuilder);
+    }
+
+    void ExpressionElemMatch::addElemMatchBson(BSONObjBuilder & subObjectBuilder) const {
+        BSONObjBuilder queryBuilder (subObjectBuilder.subobjStart("$elemMatch"));
+        queryBuilder.appendAs(primitiveMatcher.getQuery()->firstElement(),
+                              pFieldPath->getFieldPath(true));
+        queryBuilder.done();
+
+        subObjectBuilder.done();
+    }
+
+    const char *ExpressionElemMatch::getOpName() const {
+        return "$elemMatch";
     }
 
     /* --------------------- ExpressionFieldPath --------------------------- */
