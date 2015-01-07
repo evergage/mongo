@@ -18,6 +18,7 @@
 
 #include "mongo/pch.h"
 
+#include "db/matcher.h"
 #include "db/pipeline/field_path.h"
 #include "db/pipeline/value.h"
 #include "util/intrusive_counter.h"
@@ -29,9 +30,11 @@ namespace mongo {
     class BSONObjBuilder;
     class Builder;
     class Document;
+    class Matcher;
     class MutableDocument;
     class DocumentSource;
     class ExpressionContext;
+    class ExpressionFieldPath;
     class Value;
 
 
@@ -536,6 +539,36 @@ namespace mongo {
         ExpressionDivide();
     };
 
+    /**
+     * Implements matcher-like $elemMatch for $project to allow selection of first matching
+     * element from an array.
+     */
+    class ExpressionElemMatch :
+        public Expression {
+    public:
+        // virtuals from Expression
+        virtual ~ExpressionElemMatch();
+        virtual Value evaluate(const Document& pDocument) const;
+        virtual void addToBsonObj(BSONObjBuilder *pBuilder,
+                                  StringData fieldName,
+                                  bool requireExpression) const;
+        virtual void addToBsonArray(BSONArrayBuilder *pBuilder) const;
+        virtual intrusive_ptr<Expression> optimize();
+        virtual void addDependencies(set<string>& deps, vector<string>* path=NULL) const;
+
+        void addElemMatchBson(BSONObjBuilder & subObjectBuilder) const;
+
+        const char *getOpName() const;
+
+        static intrusive_ptr<ExpressionElemMatch> createFromBsonElement(BSONElement *pBsonElement);
+    private:
+        ExpressionElemMatch(intrusive_ptr<ExpressionFieldPath> pFieldPath, const BSONObj &query,
+                            const BSONObj &primitiveQuery);
+
+        intrusive_ptr<ExpressionFieldPath> pFieldPath;
+        Matcher matcher;
+        Matcher primitiveMatcher;
+    };
 
     class ExpressionFieldPath :
         public Expression {

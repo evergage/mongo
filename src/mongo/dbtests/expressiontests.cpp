@@ -935,6 +935,46 @@ namespace ExpressionTests {
 
     } // namespace Constant
 
+    namespace ElemMatch {
+
+        /** Add to a BSONObj. */
+        class AddToBsonObj {
+        public:
+            void run() {
+                BSONObj source = BSON( "$elemMatch" <<
+                    BSON( "$srcArrayField" << BSON( "c" << "baz" ) )
+                );
+
+                BSONElement sourceElement = source.firstElement();
+                intrusive_ptr<Expression> expression = ExpressionElemMatch::createFromBsonElement(
+                        &sourceElement);
+
+                BSONObjBuilder bob;
+                expression->addToBsonObj( &bob, "foo", false );
+                assertBinaryEqual( BSON("foo" << source), bob.obj() );
+            }
+        };
+
+        /** Add to a BSONArray. */
+        class AddToBsonArray {
+        public:
+            void run() {
+                BSONObj source = BSON( "$elemMatch" <<
+                    BSON( "$srcArrayField" << BSON( "c" << "baz" ) )
+                );
+
+                BSONElement sourceElement = source.firstElement();
+                intrusive_ptr<Expression> expression = ExpressionElemMatch::createFromBsonElement(
+                        &sourceElement);
+
+                BSONArrayBuilder bab;
+                expression->addToBsonArray( &bab );
+                assertBinaryEqual( BSON_ARRAY(source), bab.arr() );
+            }
+        };
+
+    } // namespace ElemMatch
+
     namespace FieldPath {
 
         /** The provided field path does not pass validation. */
@@ -3275,6 +3315,9 @@ namespace ExpressionTests {
             add<Constant::Dependencies>();
             add<Constant::AddToBsonObj>();
             add<Constant::AddToBsonArray>();
+
+            add<ElemMatch::AddToBsonObj>();
+            add<ElemMatch::AddToBsonArray>();
 
             add<FieldPath::Invalid>();
             add<FieldPath::Optimize>();
