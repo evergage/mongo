@@ -112,6 +112,7 @@ namespace mongo {
         // these are for specific operators
         int _mod;
         int _modm;
+        unsigned long _bitCmp;
         BSONType _type;
 
         shared_ptr<Matcher> _subMatcher;
