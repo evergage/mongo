@@ -47,7 +47,7 @@ namespace mongo {
      *      1.2.3-rc4-pre-
      * If you really need to do something else you'll need to fix _versionArray()
      */
-    const char versionString[] = "2.4.13";
+    const char versionString[] = "2.4.13-evg1";
 
     // See unit test for example outputs
     BSONArray toVersionArray(const char* version){
@@ -74,6 +74,12 @@ namespace mongo {
                 num = 0;
                 verify( parseNumberFromString( curPart.substr(2), &num ).isOK() );
                 finalPart = -10 + num;
+                break;
+            }
+            else if (startsWith(curPart, "evg")){
+                num = 0;
+                verify( parseNumberFromString( curPart.substr(3), &num ).isOK() );
+                finalPart = num;
                 break;
             }
             else if (curPart == "pre"){
@@ -341,6 +347,8 @@ namespace mongo {
             verify( toVersionArray("1.2.3-rc3-pre-") == BSON_ARRAY(1 << 2 << 3 << -7) );
             verify( toVersionArray("1.2.0-rc4-pre-") == BSON_ARRAY(1 << 2 << 0 << -6) );
             verify( toVersionArray("2.0.0-rc5-pre-") == BSON_ARRAY(2 << 0 << 0 << -5) );
+
+            verify( toVersionArray("2.4.12-evg1") == BSON_ARRAY(2 << 4 << 12 << 1) );
 
             LOG(1) << "versionArrayTest passed" << endl;
         }
