@@ -324,6 +324,8 @@ namespace mongo {
                 return BSONObj::opNEAR;
             else if (mongoutils::str::equals(fn + 1, "geoWithin"))
                 return BSONObj::opWITHIN;
+            else if (mongoutils::str::equals(fn + 1, "bitAnd"))
+                return BSONObj::opBITAND;
         }
         return def;
     }

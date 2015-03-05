@@ -149,6 +149,9 @@ namespace mongo {
         else if ( op == BSONObj::opTYPE ) {
             _type = (BSONType)(e.numberInt());
         }
+        else if ( op == BSONObj::opBITAND ) {
+        	_bitCmp = e.numberLong();
+        }
         else if ( op == BSONObj::opELEM_MATCH ) {
             BSONElement m = e;
             uassert( 12517 , "$elemMatch needs an Object" , m.type() == Object );
@@ -373,6 +376,13 @@ namespace mongo {
             uassert(16677, "Malformed geo query: " + queryObj.toString(),
                     query.parseFrom(queryObj));
             _geo.push_back(GeoMatcher(query, isNot));
+            break;
+        }
+        case BSONObj::opBITAND: {
+            shared_ptr< BSONObjBuilder > b( new BSONObjBuilder() );
+            _builders.push_back( b );
+            b->appendAs(fe, e.fieldName());
+            addBasic(b->done().firstElement(), op, isNot);
             break;
         }
         case BSONObj::opNEAR:
@@ -658,6 +668,21 @@ namespace mongo {
                 return false;
 
             return l.numberLong() % bm._mod == bm._modm;
+        }
+
+        if ( op == BSONObj::opBITAND ) {
+            if ( ! l.isNumber() )
+                return false;
+
+            unsigned long comparisonNumber;
+            if (l.type() == NumberInt) {
+                // Widen to long from int only after the unsigned conversion, such that the
+                // top 32 bits are zeroes and not 0xffffffff if the int was over 0x80000000.
+                comparisonNumber = static_cast<unsigned int>(l.numberInt());
+            } else {
+                comparisonNumber = static_cast<unsigned long>(l.numberLong());
+            }
+            return (comparisonNumber & bm._bitCmp) > 0;
         }
 
         if ( op == BSONObj::opTYPE ) {
