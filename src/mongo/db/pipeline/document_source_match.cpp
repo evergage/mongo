@@ -155,6 +155,10 @@ namespace {
             case BSONObj::opREGEX:
             case BSONObj::opOPTIONS:
             case BSONObj::opMOD:
+            case BSONObj::opBITS_ALL_SET:
+            case BSONObj::opBITS_ALL_CLEAR:
+            case BSONObj::opBITS_ANY_SET:
+            case BSONObj::opBITS_ANY_CLEAR:
                 output[field.fieldNameStringData()] = Value(field);
                 break;
 

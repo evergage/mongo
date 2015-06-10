@@ -268,6 +268,21 @@ namespace mongo {
         case BSONObj::opWITHIN:
         case BSONObj::opGEO_INTERSECTS:
             return expressionParserGeoCallback( name, x, context );
+
+        // Handles bitwise query operators.
+
+        case BSONObj::opBITS_ALL_SET:
+            return _parseBitTest<BitsAllSetMatchExpression>(name, e);
+
+        case BSONObj::opBITS_ALL_CLEAR:
+            return _parseBitTest<BitsAllClearMatchExpression>(name, e);
+
+        case BSONObj::opBITS_ANY_SET:
+            return _parseBitTest<BitsAnySetMatchExpression>(name, e);
+
+        case BSONObj::opBITS_ANY_CLEAR:
+            return _parseBitTest<BitsAnyClearMatchExpression>(name, e);
+
         }
 
         return StatusWithMatchExpression( ErrorCodes::BadValue,
@@ -325,7 +340,7 @@ namespace mongo {
                         return StatusWithMatchExpression( s );
                     root->add( temp.release() );
                 }
-                else if ( mongoutils::str::equals( "atomic", rest ) || 
+                else if ( mongoutils::str::equals( "atomic", rest ) ||
                           mongoutils::str::equals( "isolated", rest ) ) {
                     if ( !topLevel )
                         return StatusWithMatchExpression( ErrorCodes::BadValue,
@@ -786,6 +801,153 @@ namespace mongo {
         }
 
         return StatusWithMatchExpression( myAnd.release() );
+    }
+
+    template <class T>
+    StatusWithMatchExpression MatchExpressionParser::_parseBitTest(const char* name,
+                                                                   const BSONElement& e) {
+        std::auto_ptr<BitTestMatchExpression> bitTestMatchExpression(new T());
+
+        if (e.type() == BSONType::Array) {
+            // Array of bit positions provided as value.
+            auto statusWithBitPositions = _parseBitPositionsArray(e.Obj());
+            if (!statusWithBitPositions.isOK()) {
+                return StatusWithMatchExpression(statusWithBitPositions.getStatus());
+            }
+
+            std::vector<uint32_t> bitPositions = statusWithBitPositions.getValue();
+            Status s = bitTestMatchExpression->init(name, bitPositions);
+            if (!s.isOK()) {
+                return StatusWithMatchExpression(s);
+            }
+        } else if (e.isNumber()) {
+            // Integer bitmask provided as value.
+
+            if (e.type() == BSONType::NumberDouble) {
+                double eDouble = e.numberDouble();
+
+                // NaN doubles are rejected.
+                if (std::isnan(eDouble)) {
+                    mongoutils::str::stream ss;
+                    ss << name << " cannot take a NaN";
+                    return StatusWithMatchExpression(ErrorCodes::BadValue, ss);
+                }
+
+                // No integral doubles that are too large to be represented as a 64 bit signed integer.
+                // We use 'kLongLongMaxAsDouble' because if we just did eDouble > 2^63-1, it would be
+                // compared against 2^63. eDouble=2^63 would not get caught that way.
+                if (eDouble >= BitTestMatchExpression::kLongLongMaxPlusOneAsDouble ||
+                    eDouble < std::numeric_limits<long long>::min()) {
+                    mongoutils::str::stream ss;
+                    ss << name << " cannot be represented as a 64-bit integer: " << e;
+                    return StatusWithMatchExpression(ErrorCodes::BadValue, ss);
+                }
+
+                // This checks if e is an integral double.
+                if (eDouble != static_cast<double>(static_cast<long long>(eDouble))) {
+                    mongoutils::str::stream ss;
+                    ss << name << " cannot have a fractional part but received: " << e;
+                    return StatusWithMatchExpression(ErrorCodes::BadValue, ss);
+                }
+            }
+
+            long long bitMask = e.numberLong();
+
+            // No negatives.
+            if (bitMask < 0) {
+                mongoutils::str::stream ss;
+                ss << name << " cannot take a negative number: " << e;
+                return StatusWithMatchExpression(ErrorCodes::BadValue, ss);
+            }
+
+            Status s = bitTestMatchExpression->init(name, bitMask);
+            if (!s.isOK()) {
+                return StatusWithMatchExpression(s);
+            }
+        } else if (e.type() == BSONType::BinData) {
+            // Binary bitmask provided as value.
+
+            int eBinaryLen;
+            const char* eBinary = e.binData(eBinaryLen);
+
+            Status s = bitTestMatchExpression->init(name, eBinary, eBinaryLen);
+            if (!s.isOK()) {
+                return StatusWithMatchExpression(s);
+            }
+        } else {
+            mongoutils::str::stream ss;
+            ss << name << " takes an Array, a number, or a BinData but received: " << e;
+            return StatusWithMatchExpression(ErrorCodes::BadValue, ss);
+        }
+
+        return StatusWithMatchExpression(bitTestMatchExpression.release());
+    }
+
+    StatusWith<std::vector<uint32_t> > MatchExpressionParser::_parseBitPositionsArray(
+        const BSONObj& theArray) {
+        std::vector<uint32_t> bitPositions;
+
+        // Fill temporary bit position array with integers read from the BSON array.
+        BSONObjIterator i( theArray );
+        while ( i.more() ) {
+            BSONElement e = i.next();
+            if (!e.isNumber()) {
+                mongoutils::str::stream ss;
+                ss << "bit positions must be an integer but got: " << e;
+                return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+            }
+
+            if (e.type() == BSONType::NumberDouble) {
+                double eDouble = e.numberDouble();
+
+                // NaN doubles are rejected.
+                if (std::isnan(eDouble)) {
+                    mongoutils::str::stream ss;
+                    ss << "bit positions cannot take a NaN: " << e;
+                    return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+                }
+
+                // This makes sure e does not overflow a 32-bit integer container.
+                if (eDouble > std::numeric_limits<int>::max() ||
+                    eDouble < std::numeric_limits<int>::min()) {
+                    mongoutils::str::stream ss;
+                    ss << "bit positions cannot be represented as a 32-bit signed integer: " << e;
+                    return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+                }
+
+                // This checks if e is integral.
+                if (eDouble != static_cast<double>(static_cast<long long>(eDouble))) {
+                    mongoutils::str::stream ss;
+                    ss << "bit positions must be an integer but got: " << e;
+                    return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+                }
+            }
+
+            if (e.type() == BSONType::NumberLong) {
+                long long eLong = e.numberLong();
+
+                // This makes sure e does not overflow a 32-bit integer container.
+                if (eLong > std::numeric_limits<int>::max() ||
+                    eLong < std::numeric_limits<int>::min()) {
+                    mongoutils::str::stream ss;
+                    ss << "bit positions cannot be represented as a 32-bit signed integer: " << e;
+                    return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+                }
+            }
+
+            int eValue = e.numberInt();
+
+            // No negatives.
+            if (eValue < 0) {
+                mongoutils::str::stream ss;
+                ss << "bit positions must be >= 0 but got: " << e;
+                return StatusWith<std::vector<uint32_t> >(ErrorCodes::BadValue, ss);
+            }
+
+            bitPositions.push_back(eValue);
+        }
+
+        return StatusWith<std::vector<uint32_t> >(bitPositions);
     }
 
     StatusWithMatchExpression MatchExpressionParser::WhereCallback::parseWhere(
