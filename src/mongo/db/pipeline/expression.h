@@ -583,14 +583,14 @@ namespace mongo {
     };
 
 
-    class ExpressionFilter final : public Expression {
+    class ExpressionFilter : public Expression {
     public:
         // virtuals from Expression
-        boost::intrusive_ptr<Expression> optimize() final;
-        Value serialize(bool explain) const final;
-        Value evaluateInternal(Variables* vars) const final;
+        boost::intrusive_ptr<Expression> optimize();
+        Value serialize(bool explain) const;
+        Value evaluateInternal(Variables* vars) const;
         void addDependencies(DepsTracker* deps,
-                             std::vector<std::string>* path=NULL) const final;
+                             std::vector<std::string>* path=NULL) const;
 
         static boost::intrusive_ptr<Expression> parse(
             BSONElement expr,

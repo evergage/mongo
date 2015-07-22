@@ -1299,7 +1299,8 @@ namespace {
         BSONElement inputElem;
         BSONElement asElem;
         BSONElement condElem;
-        for (auto elem : expr.Obj()) {
+
+        BSONForEach(elem, expr.Obj()) {
             if (str::equals(elem.fieldName(), "input")) {
                 inputElem = elem;
             } else if (str::equals(elem.fieldName(), "as")) {
@@ -1331,17 +1332,17 @@ namespace {
         // Parse "cond", has access to "as" variable.
         intrusive_ptr<Expression> cond = parseOperand(condElem, vpsSub);
 
-        return new ExpressionFilter(std::move(varName), varId, std::move(input), std::move(cond));
+        return new ExpressionFilter(boost::move(varName), varId, boost::move(input), boost::move(cond));
     }
 
     ExpressionFilter::ExpressionFilter(string varName,
                                        Variables::Id varId,
                                        intrusive_ptr<Expression> input,
                                        intrusive_ptr<Expression> filter)
-        : _varName(std::move(varName))
+        : _varName(boost::move(varName))
         , _varId(varId)
-        , _input(std::move(input))
-        , _filter(std::move(filter))
+        , _input(boost::move(input))
+        , _filter(boost::move(filter))
     {}
 
     intrusive_ptr<Expression> ExpressionFilter::optimize() {
@@ -1374,15 +1375,16 @@ namespace {
             return inputVal;
 
         vector<Value> output;
-        for (const auto& elem : input) {
+        for (size_t i=0; i < input.size(); i++) {
+            const Value &elem = input[i];
             vars->setValue(_varId, elem);
 
             if (_filter->evaluateInternal(vars).coerceToBool()) {
-                output.push_back(std::move(elem));
+                output.push_back(boost::move(elem));
             }
         }
 
-        return Value(std::move(output));
+        return Value(boost::move(output));
     }
 
     void ExpressionFilter::addDependencies(DepsTracker* deps, vector<string>* path) const {
