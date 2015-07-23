@@ -138,6 +138,10 @@ namespace {
         case MatchExpression::ALWAYS_FALSE: return "af"; break;
         case MatchExpression::GEO_NEAR: return "gn"; break;
         case MatchExpression::TEXT: return "te"; break;
+        case MatchExpression::BITS_ALL_SET: return "ls"; break;
+        case MatchExpression::BITS_ALL_CLEAR: return "lc"; break;
+        case MatchExpression::BITS_ANY_SET: return "ys"; break;
+        case MatchExpression::BITS_ANY_CLEAR: return "yc"; break;
         default: verify(0); return "";
         }
     }

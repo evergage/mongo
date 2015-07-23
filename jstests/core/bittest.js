@@ -4,15 +4,13 @@
 (function() {
     'use strict';
 
-    load("jstests/libs/analyze_plan.js");
-
     var coll = db.jstests_bitwise;
 
     function assertQueryCorrect(query, count) {
         var explain = coll.find(query).explain("executionStats");
-        assert(isCollscan(explain.queryPlanner.winningPlan),
+        assert(explain.stats.type === "COLLSCAN",
                "expected bit test query plan to be COLLSCAN");
-        assert.eq(count, explain.executionStats.nReturned,
+        assert.eq(count, explain.n,
                   "bit test query not returning correct documents");
     }
 

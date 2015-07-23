@@ -364,6 +364,14 @@ namespace mongo {
                 return BSONObj::opNEAR;
             else if (str::equals(fn + 1, "geoWithin"))
                 return BSONObj::opWITHIN;
+            else if (str::equals(fn + 1, "bitsAllSet"))
+                return BSONObj::opBITS_ALL_SET;
+            else if (str::equals(fn + 1, "bitsAllClear"))
+                return BSONObj::opBITS_ALL_CLEAR;
+            else if (str::equals(fn + 1, "bitsAnySet"))
+                return BSONObj::opBITS_ANY_SET;
+            else if (str::equals(fn + 1, "bitsAnyClear"))
+                return BSONObj::opBITS_ANY_CLEAR;
         }
         return def;
     }
