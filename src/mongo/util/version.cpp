@@ -31,7 +31,7 @@ namespace mongo {
      *      1.2.3-rc4-pre-
      * If you really need to do something else you'll need to fix _versionArray()
      */
-    const char versionString[] = "2.6.10";
+    const char versionString[] = "2.6.10-evg1";
 
     // See unit test for example outputs
     BSONArray toVersionArray(const char* version){
@@ -58,6 +58,12 @@ namespace mongo {
                 num = 0;
                 verify( parseNumberFromString( curPart.substr(2), &num ).isOK() );
                 finalPart = -10 + num;
+                break;
+            }
+            else if (startsWith(curPart, "evg")){
+                num = 0;
+                verify( parseNumberFromString( curPart.substr(3), &num ).isOK() );
+                finalPart = num;
                 break;
             }
             else if (curPart == "pre"){

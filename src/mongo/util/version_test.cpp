@@ -46,4 +46,8 @@ namespace {
         ASSERT_EQUALS( toVersionArray("2.0.0-rc5-pre-"), BSON_ARRAY(2 << 0 << 0 << -5) );
     }
 
+    TEST(VersionTest, EvergageCustomCase) {
+        ASSERT_EQUALS( toVersionArray("2.4.12-evg1"), BSON_ARRAY(2 << 4 << 12 << 1) );
+    }
+
 } // namespace
