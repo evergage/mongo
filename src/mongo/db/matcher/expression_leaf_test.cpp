@@ -1657,7 +1657,9 @@ namespace mongo {
         std::vector<uint32_t> bitPositions;
 
         // Convert BSONArray of bit positions to int vector
-        for (const auto& elt : ba) {
+        BSONObjIterator i( ba );
+        while ( i.more() ) {
+            BSONElement elt = i.next();
             bitPositions.push_back(elt._numberInt());
         }
 
