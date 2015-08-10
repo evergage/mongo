@@ -1487,7 +1487,8 @@ namespace {
         BSONElement inputElem;
         BSONElement asElem;
         BSONElement condElem;
-        for (auto elem : expr.Obj()) {
+
+        BSONForEach(elem, expr.Obj()) {
             if (str::equals(elem.fieldName(), "input")) {
                 inputElem = elem;
             } else if (str::equals(elem.fieldName(), "as")) {
