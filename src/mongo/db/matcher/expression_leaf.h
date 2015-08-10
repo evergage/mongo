@@ -475,44 +475,40 @@ namespace mongo {
     class BitsAllSetMatchExpression : public BitTestMatchExpression {
     public:
         BitsAllSetMatchExpression() : BitTestMatchExpression(BITS_ALL_SET) {}
-        virtual std::unique_ptr<MatchExpression> shallowClone() const {
-            std::unique_ptr<BitTestMatchExpression> bitTestMatchExpression =
-                stdx::make_unique<BitsAllSetMatchExpression>();
-            initClone(bitTestMatchExpression.get());
-            return std::move(bitTestMatchExpression);
+        virtual BitsAllSetMatchExpression* shallowClone() const {
+            BitsAllSetMatchExpression* bitTestMatchExpression = new BitsAllSetMatchExpression();
+            initClone(bitTestMatchExpression);
+            return bitTestMatchExpression;
         }
     };
 
     class BitsAllClearMatchExpression : public BitTestMatchExpression {
     public:
         BitsAllClearMatchExpression() : BitTestMatchExpression(BITS_ALL_CLEAR) {}
-        virtual std::unique_ptr<MatchExpression> shallowClone() const {
-            std::unique_ptr<BitTestMatchExpression> bitTestMatchExpression =
-                stdx::make_unique<BitsAllClearMatchExpression>();
-            initClone(bitTestMatchExpression.get());
-            return std::move(bitTestMatchExpression);
+        virtual BitsAllClearMatchExpression* shallowClone() const {
+            BitsAllClearMatchExpression* bitTestMatchExpression = new BitsAllClearMatchExpression();
+            initClone(bitTestMatchExpression);
+            return bitTestMatchExpression;
         }
     };
 
     class BitsAnySetMatchExpression : public BitTestMatchExpression {
     public:
         BitsAnySetMatchExpression() : BitTestMatchExpression(BITS_ANY_SET) {}
-        virtual std::unique_ptr<MatchExpression> shallowClone() const {
-            std::unique_ptr<BitTestMatchExpression> bitTestMatchExpression =
-                stdx::make_unique<BitsAnySetMatchExpression>();
-            initClone(bitTestMatchExpression.get());
-            return std::move(bitTestMatchExpression);
+        virtual BitsAnySetMatchExpression* shallowClone() const {
+            BitsAnySetMatchExpression* bitTestMatchExpression = new BitsAnySetMatchExpression();
+            initClone(bitTestMatchExpression);
+            return bitTestMatchExpression;
         }
     };
 
     class BitsAnyClearMatchExpression : public BitTestMatchExpression {
     public:
         BitsAnyClearMatchExpression() : BitTestMatchExpression(BITS_ANY_CLEAR) {}
-        virtual std::unique_ptr<MatchExpression> shallowClone() const {
-            std::unique_ptr<BitTestMatchExpression> bitTestMatchExpression =
-                stdx::make_unique<BitsAnyClearMatchExpression>();
-            initClone(bitTestMatchExpression.get());
-            return std::move(bitTestMatchExpression);
+        virtual BitsAnyClearMatchExpression* shallowClone() const {
+            BitsAnyClearMatchExpression* bitTestMatchExpression = new BitsAnyClearMatchExpression();
+            initClone(bitTestMatchExpression);
+            return bitTestMatchExpression;
         }
     };
 
