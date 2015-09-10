@@ -136,11 +136,11 @@ public:
             _storage.type == NumberInt;
     }
 
-        /**
-         * Returns true if this value is a numeric type that can be represented as a 32-bit integer,
-         * and false otherwise.
-         */
-        bool integral() const;
+    /**
+     * Returns true if this value is a numeric type that can be represented as a 32-bit integer,
+     * and false otherwise.
+     */
+    bool integral() const;
 
     /// Get the BSON type of the field.
     BSONType getType() const {

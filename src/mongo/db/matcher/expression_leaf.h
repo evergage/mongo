@@ -432,117 +432,117 @@ private:
     int _type;
 };
 
+/**
+ * Bit test query operators include $bitsAllSet, $bitsAllClear, $bitsAnySet, and $bitsAnyClear.
+ */
+class BitTestMatchExpression : public LeafMatchExpression {
+public:
+    // Constant used in matchesSingleElement() and MatchExpressionParser::_parseBitTest. Is a
+    // double representation of 2^63.
+    static const double kLongLongMaxPlusOneAsDouble;
+
+    BitTestMatchExpression(MatchType type) : LeafMatchExpression(type) {}
+    virtual ~BitTestMatchExpression() {}
+
     /**
-     * Bit test query operators include $bitsAllSet, $bitsAllClear, $bitsAnySet, and $bitsAnyClear.
+     * Initialize with either bit positions, a 64-bit numeric bitmask, or a char array
+     * bitmask.
      */
-    class BitTestMatchExpression : public LeafMatchExpression {
-    public:
-        // Constant used in matchesSingleElement() and MatchExpressionParser::_parseBitTest. Is a
-        // double representation of 2^63.
-        static const double kLongLongMaxPlusOneAsDouble;
+    Status init(StringData path, std::vector<uint32_t> bitPositions);
+    Status init(StringData path, uint64_t bitMask);
+    Status init(StringData path, const char* bitMaskBinary, uint32_t bitMaskLen);
 
-        BitTestMatchExpression(MatchType type) : LeafMatchExpression(type) {}
-        virtual ~BitTestMatchExpression() {}
+    virtual bool matchesSingleElement(const BSONElement& e) const;
 
-        /**
-         * Initialize with either bit positions, a 64-bit numeric bitmask, or a char array
-         * bitmask.
-         */
-        Status init(StringData path, std::vector<uint32_t> bitPositions);
-        Status init(StringData path, uint64_t bitMask);
-        Status init(StringData path, const char* bitMaskBinary, uint32_t bitMaskLen);
+    virtual void debugString(StringBuilder& debug, int level) const;
 
-        virtual bool matchesSingleElement(const BSONElement& e) const;
+    virtual void toBSON(BSONObjBuilder* out) const;
 
-        virtual void debugString(StringBuilder& debug, int level) const;
+    virtual bool equivalent(const MatchExpression* other) const;
 
-        virtual void toBSON(BSONObjBuilder* out) const;
+    size_t numBitPositions() const {
+        return _bitPositions.size();
+    }
 
-        virtual bool equivalent(const MatchExpression* other) const;
+    const std::vector<uint32_t>& getBitPositions() const {
+        return _bitPositions;
+    }
 
-        size_t numBitPositions() const {
-            return _bitPositions.size();
+protected:
+    /**
+     * Used to copy this match expression to another BitTestMatchExpression. Does not take
+     * ownership.
+     */
+    void initClone(BitTestMatchExpression* clone) const {
+        clone->init(path(), _bitPositions);
+        if (getTag()) {
+            clone->setTag(getTag()->clone());
         }
+    }
 
-        const std::vector<uint32_t>& getBitPositions() const {
-            return _bitPositions;
-        }
+private:
+    /**
+     * Performs bit test using bit positions on 'eValue' and returns whether or not the bit test
+     * passes.
+     */
+    bool performBitTest(long long eValue) const;
 
-    protected:
-        /**
-         * Used to copy this match expression to another BitTestMatchExpression. Does not take
-         * ownership.
-         */
-        void initClone(BitTestMatchExpression* clone) const {
-            clone->init(path(), _bitPositions);
-            if (getTag()) {
-                clone->setTag(getTag()->clone());
-            }
-        }
+    /**
+     * Performs bit test using bit positions on 'eBinary' with length (in bytes) 'eBinaryLen' and
+     * returns whether or not the bit test passes.
+     */
+    bool performBitTest(const char* eBinary, uint32_t eBinaryLen) const;
 
-    private:
-        /**
-         * Performs bit test using bit positions on 'eValue' and returns whether or not the bit test
-         * passes.
-         */
-        bool performBitTest(long long eValue) const;
+    /**
+     * Helper function for performBitTest(...).
+     *
+     * needFurtherBitTests() determines if the result of a bit-test ('isBitSet') is enough
+     * information to skip the rest of the bit tests.
+     **/
+    bool needFurtherBitTests(bool isBitSet) const;
 
-        /**
-         * Performs bit test using bit positions on 'eBinary' with length (in bytes) 'eBinaryLen' and
-         * returns whether or not the bit test passes.
-         */
-        bool performBitTest(const char* eBinary, uint32_t eBinaryLen) const;
+    // Vector of bit positions to test, with bit position 0 being the least significant bit.
+    std::vector<uint32_t> _bitPositions;
+};
 
-        /**
-         * Helper function for performBitTest(...).
-         *
-         * needFurtherBitTests() determines if the result of a bit-test ('isBitSet') is enough
-         * information to skip the rest of the bit tests.
-         **/
-        bool needFurtherBitTests(bool isBitSet) const;
+class BitsAllSetMatchExpression : public BitTestMatchExpression {
+public:
+    BitsAllSetMatchExpression() : BitTestMatchExpression(BITS_ALL_SET) {}
+    virtual BitsAllSetMatchExpression* shallowClone() const {
+        BitsAllSetMatchExpression* bitTestMatchExpression = new BitsAllSetMatchExpression();
+        initClone(bitTestMatchExpression);
+        return bitTestMatchExpression;
+    }
+};
 
-        // Vector of bit positions to test, with bit position 0 being the least significant bit.
-        std::vector<uint32_t> _bitPositions;
-    };
+class BitsAllClearMatchExpression : public BitTestMatchExpression {
+public:
+    BitsAllClearMatchExpression() : BitTestMatchExpression(BITS_ALL_CLEAR) {}
+    virtual BitsAllClearMatchExpression* shallowClone() const {
+        BitsAllClearMatchExpression* bitTestMatchExpression = new BitsAllClearMatchExpression();
+        initClone(bitTestMatchExpression);
+        return bitTestMatchExpression;
+    }
+};
 
-    class BitsAllSetMatchExpression : public BitTestMatchExpression {
-    public:
-        BitsAllSetMatchExpression() : BitTestMatchExpression(BITS_ALL_SET) {}
-        virtual BitsAllSetMatchExpression* shallowClone() const {
-            BitsAllSetMatchExpression* bitTestMatchExpression = new BitsAllSetMatchExpression();
-            initClone(bitTestMatchExpression);
-            return bitTestMatchExpression;
-        }
-    };
+class BitsAnySetMatchExpression : public BitTestMatchExpression {
+public:
+    BitsAnySetMatchExpression() : BitTestMatchExpression(BITS_ANY_SET) {}
+    virtual BitsAnySetMatchExpression* shallowClone() const {
+        BitsAnySetMatchExpression* bitTestMatchExpression = new BitsAnySetMatchExpression();
+        initClone(bitTestMatchExpression);
+        return bitTestMatchExpression;
+    }
+};
 
-    class BitsAllClearMatchExpression : public BitTestMatchExpression {
-    public:
-        BitsAllClearMatchExpression() : BitTestMatchExpression(BITS_ALL_CLEAR) {}
-        virtual BitsAllClearMatchExpression* shallowClone() const {
-            BitsAllClearMatchExpression* bitTestMatchExpression = new BitsAllClearMatchExpression();
-            initClone(bitTestMatchExpression);
-            return bitTestMatchExpression;
-        }
-    };
-
-    class BitsAnySetMatchExpression : public BitTestMatchExpression {
-    public:
-        BitsAnySetMatchExpression() : BitTestMatchExpression(BITS_ANY_SET) {}
-        virtual BitsAnySetMatchExpression* shallowClone() const {
-            BitsAnySetMatchExpression* bitTestMatchExpression = new BitsAnySetMatchExpression();
-            initClone(bitTestMatchExpression);
-            return bitTestMatchExpression;
-        }
-    };
-
-    class BitsAnyClearMatchExpression : public BitTestMatchExpression {
-    public:
-        BitsAnyClearMatchExpression() : BitTestMatchExpression(BITS_ANY_CLEAR) {}
-        virtual BitsAnyClearMatchExpression* shallowClone() const {
-            BitsAnyClearMatchExpression* bitTestMatchExpression = new BitsAnyClearMatchExpression();
-            initClone(bitTestMatchExpression);
-            return bitTestMatchExpression;
-        }
-    };
+class BitsAnyClearMatchExpression : public BitTestMatchExpression {
+public:
+    BitsAnyClearMatchExpression() : BitTestMatchExpression(BITS_ANY_CLEAR) {}
+    virtual BitsAnyClearMatchExpression* shallowClone() const {
+        BitsAnyClearMatchExpression* bitTestMatchExpression = new BitsAnyClearMatchExpression();
+        initClone(bitTestMatchExpression);
+        return bitTestMatchExpression;
+    }
+};
 
 }  // namespace mongo

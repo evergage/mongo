@@ -408,11 +408,11 @@ public:
 };
 
 
-    class ExpressionArrayElemAt final : public ExpressionFixedArity<ExpressionArrayElemAt, 2> {
-    public:
-        Value evaluateInternal(Variables* vars) const final;
-        const char* getOpName() const final;
-    };
+class ExpressionArrayElemAt final : public ExpressionFixedArity<ExpressionArrayElemAt, 2> {
+public:
+    virtual Value evaluateInternal(Variables* vars) const final;
+    virtual const char* getOpName() const final;
+};
 
 
 class ExpressionCoerceToBool : public Expression {
@@ -637,36 +637,36 @@ private:
 
     const FieldPath _fieldPath;
     const Variables::Id _variable;
-    };
+};
 
 
-    class ExpressionFilter final : public Expression {
-    public:
-        // virtuals from Expression
-        boost::intrusive_ptr<Expression> optimize() final;
-        Value serialize(bool explain) const final;
-        Value evaluateInternal(Variables* vars) const final;
-        void addDependencies(DepsTracker* deps,
-                             std::vector<std::string>* path=NULL) const final;
+class ExpressionFilter final : public Expression {
+public:
+    // virtuals from Expression
+    boost::intrusive_ptr<Expression> optimize() final;
+    Value serialize(bool explain) const final;
+    Value evaluateInternal(Variables* vars) const final;
+    void addDependencies(DepsTracker* deps,
+                         std::vector<std::string>* path=NULL) const final;
 
-        static boost::intrusive_ptr<Expression> parse(
-            BSONElement expr,
-            const VariablesParseState& vps);
+    static boost::intrusive_ptr<Expression> parse(
+        BSONElement expr,
+        const VariablesParseState& vps);
 
-    private:
-        ExpressionFilter(std::string varName,
-                         Variables::Id varId,
-                         boost::intrusive_ptr<Expression> input,
-                         boost::intrusive_ptr<Expression> filter);
+private:
+    ExpressionFilter(std::string varName,
+                     Variables::Id varId,
+                     boost::intrusive_ptr<Expression> input,
+                     boost::intrusive_ptr<Expression> filter);
 
-        // The name of the variable to set to each element in the array.
-        std::string _varName;
-        // The id of the variable to set.
-        Variables::Id _varId;
-        // The array to iterate over.
-        boost::intrusive_ptr<Expression> _input;
-        // The expression determining whether each element should be present in the result array.
-        boost::intrusive_ptr<Expression> _filter;
+    // The name of the variable to set to each element in the array.
+    std::string _varName;
+    // The id of the variable to set.
+    Variables::Id _varId;
+    // The array to iterate over.
+    boost::intrusive_ptr<Expression> _input;
+    // The expression determining whether each element should be present in the result array.
+    boost::intrusive_ptr<Expression> _filter;
 };
 
 
