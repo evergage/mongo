@@ -136,6 +136,12 @@ public:
             _storage.type == NumberInt;
     }
 
+    /**
+     * Returns true if this value is a numeric type that can be represented as a 32-bit integer,
+     * and false otherwise.
+     */
+    bool integral() const;
+
     /// Get the BSON type of the field.
     BSONType getType() const {
         return _storage.bsonType();
@@ -179,7 +185,6 @@ public:
     friend BSONObjBuilder& operator<<(BSONObjBuilderValueStream& builder, const Value& val);
 
     /** Coerce a value to a bool using BSONElement::trueValue() rules.
-     *  Some types unsupported.  SERVER-6120
      */
     bool coerceToBool() const;
 

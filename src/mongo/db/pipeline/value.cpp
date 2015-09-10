@@ -30,6 +30,7 @@
 
 #include "mongo/db/pipeline/value.h"
 
+#include <limits>
 #include <boost/functional/hash.hpp>
 #include <boost/scoped_array.hpp>
 
@@ -844,6 +845,22 @@ BSONType Value::getWidestNumeric(BSONType lType, BSONType rType) {
 
     // Reachable, but callers must subsequently err out in this case.
     return Undefined;
+}
+
+bool Value::integral() const {
+    switch (getType()) {
+    case NumberInt:
+        return true;
+    case NumberLong:
+        return (_storage.longValue <= numeric_limits<int>::max()
+                && _storage.longValue >= numeric_limits<int>::min());
+    case NumberDouble:
+        return (_storage.doubleValue <= numeric_limits<int>::max()
+                && _storage.doubleValue >= numeric_limits<int>::min()
+                && _storage.doubleValue == static_cast<int>(_storage.doubleValue));
+    default:
+        return false;
+    }
 }
 
 size_t Value::getApproximateSize() const {
