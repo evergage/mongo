@@ -5,6 +5,9 @@ pre:
     - command: shell.track
 
 post:
+    - command: attach.results
+      params:
+        file_location: src/report.json
     - command: shell.cleanup
 
 functions:
@@ -74,6 +77,12 @@ functions:
         task: ${task_name}
         file: "src/history.json"
         name: "perf"
+    - command: json.get_history
+      params:
+        tags: true
+        task: ${task_name}
+        file: "src/tags.json"
+        name: "perf"
     - command: shell.exec
       type : test
       params:
@@ -82,7 +91,7 @@ functions:
           set -o errexit
           set -o verbose
           source ./venv/bin/activate
-          python perf_regression_check.py -f history.json --rev ${revision}
+          python perf_regression_check.py -f history.json --rev ${revision} -t tags.json --refTag 3.0.6-Baseline
   "run perf tests":
     - command: shell.exec
       params:
@@ -97,7 +106,7 @@ functions:
       params:
         working_dir: src
         script: |
-          set -e 
+          set -e
           set -v
           source ./venv/bin/activate
           cd perf-3.0
