@@ -38,12 +38,14 @@
 
 #include "mongo/base/counter.h"
 #include "mongo/base/owned_pointer_map.h"
+#include "mongo/db/background.h"
 #include "mongo/db/clientcursor.h"
 #include "mongo/db/commands/server_status_metric.h"
 #include "mongo/db/curop.h"
 #include "mongo/db/catalog/collection_catalog_entry.h"
 #include "mongo/db/catalog/database_catalog_entry.h"
 #include "mongo/db/catalog/index_create.h"
+#include "mongo/db/global_environment_experiment.h"
 #include "mongo/db/index/index_access_method.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/repl/replication_coordinator_global.h"
@@ -92,6 +94,7 @@ Collection::Collection(OperationContext* txn,
       _details(details),
       _recordStore(recordStore),
       _dbce(dbce),
+      _needCappedLock(supportsDocLocking() && _recordStore->isCapped() && _ns.db() != "local"),
       _infoCache(this),
       _indexCatalog(this),
       _cursorManager(fullNS) {
@@ -227,9 +230,12 @@ StatusWith<RecordId> Collection::_insertDocument(OperationContext* txn,
                                                  bool enforceQuota) {
     dassert(txn->lockState()->isCollectionLockedForMode(ns().toString(), MODE_IX));
 
-    // TODO: for now, capped logic lives inside NamespaceDetails, which is hidden
-    //       under the RecordStore, this feels broken since that should be a
-    //       collection access method probably
+    if (_needCappedLock) {
+        // X-lock the metadata resource for this capped collection until the end of the WUOW. This
+        // prevents the primary from executing with more concurrency than secondaries.
+        // See SERVER-21646.
+        Lock::ResourceLock{txn->lockState(), ResourceId(RESOURCE_METADATA, _ns.ns()), MODE_X};
+    }
 
     StatusWith<RecordId> loc = _recordStore->insertRecord(
         txn, docToInsert.objdata(), docToInsert.objsize(), _enforceQuota(enforceQuota));
@@ -295,6 +301,13 @@ StatusWith<RecordId> Collection::updateDocument(OperationContext* txn,
                                                 OpDebug* debug) {
     dassert(txn->lockState()->isCollectionLockedForMode(ns().toString(), MODE_IX));
     invariant(objOld.snapshotId() == txn->recoveryUnit()->getSnapshotId());
+
+    if (_needCappedLock) {
+        // X-lock the metadata resource for this capped collection until the end of the WUOW. This
+        // prevents the primary from executing with more concurrency than secondaries.
+        // See SERVER-21646.
+        Lock::ResourceLock{txn->lockState(), ResourceId(RESOURCE_METADATA, _ns.ns()), MODE_X};
+    }
 
     SnapshotId sid = txn->recoveryUnit()->getSnapshotId();
 
@@ -468,7 +481,8 @@ uint64_t Collection::getIndexSize(OperationContext* opCtx, BSONObjBuilder* detai
  */
 Status Collection::truncate(OperationContext* txn) {
     dassert(txn->lockState()->isCollectionLockedForMode(ns().toString(), MODE_X));
-    massert(17445, "index build in progress", _indexCatalog.numIndexesInProgress(txn) == 0);
+    BackgroundOperation::assertNoBgOpInProgForNs(ns());
+    invariant(_indexCatalog.numIndexesInProgress(txn) == 0);
 
     // 1) store index specs
     vector<BSONObj> indexSpecs;
@@ -505,6 +519,8 @@ Status Collection::truncate(OperationContext* txn) {
 void Collection::temp_cappedTruncateAfter(OperationContext* txn, RecordId end, bool inclusive) {
     dassert(txn->lockState()->isCollectionLockedForMode(ns().toString(), MODE_IX));
     invariant(isCapped());
+    BackgroundOperation::assertNoBgOpInProgForNs(ns());
+    invariant(_indexCatalog.numIndexesInProgress(txn) == 0);
 
     _cursorManager.invalidateAll(false);
     _recordStore->temp_cappedTruncateAfter(txn, end, inclusive);
