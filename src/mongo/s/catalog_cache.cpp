@@ -426,14 +426,14 @@ void CatalogCache::_scheduleCollectionRefresh_inlock(
 
             collections.erase(it);
         } else {
-            log() << "Refresh for collection " << nss << " took " << t.millis()
+            LOG(1) << "Refresh for collection " << nss << " took " << t.millis()
                   << " ms and found version " << newRoutingInfo->getVersion();
 
             collEntry.routingInfo = std::move(newRoutingInfo);
         }
     };
 
-    log() << "Refreshing chunks for collection " << nss << " based on version "
+    LOG(1) << "Refreshing chunks for collection " << nss << " based on version "
           << startingCollectionVersion;
 
     try {
