@@ -565,7 +565,7 @@ void Listener::initAndListen() {
         if (_logConnect && !serverGlobalParams.quiet) {
             int conns = globalTicketHolder.used() + 1;
             const char* word = (conns == 1 ? " connection" : " connections");
-            log() << "connection accepted from " << from.toString() << " #" << myConnectionNumber
+            LOG(1) << "connection accepted from " << from.toString() << " #" << myConnectionNumber
                   << " (" << conns << word << " now open)";
         }
 
