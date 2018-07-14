@@ -110,7 +110,7 @@ void ServiceEntryPointImpl::startSession(transport::SessionHandle session) {
 
     if (!quiet) {
         const auto word = (connectionCount == 1 ? " connection"_sd : " connections"_sd);
-        log() << "connection accepted from " << session->remote() << " #" << session->id() << " ("
+        LOG(1) << "connection accepted from " << session->remote() << " #" << session->id() << " ("
               << connectionCount << word << " now open)";
     }
 
@@ -125,7 +125,7 @@ void ServiceEntryPointImpl::startSession(transport::SessionHandle session) {
         }
         _shutdownCondition.notify_one();
         const auto word = (connectionCount == 1 ? " connection"_sd : " connections"_sd);
-        log() << "end connection " << remote << " (" << connectionCount << word << " now open)";
+        LOG(1) << "end connection " << remote << " (" << connectionCount << word << " now open)";
 
     });
 
