@@ -370,7 +370,7 @@ void CatalogCache::_scheduleCollectionRefresh(WithLock lk,
             log() << "Refresh for collection " << nss << " took " << t.millis() << " ms and failed"
                   << causedBy(redact(status));
         } else if (routingInfoAfterRefresh) {
-            log() << "Refresh for collection " << nss << " took " << t.millis()
+            LOG(1) << "Refresh for collection " << nss << " took " << t.millis()
                   << " ms and found version " << routingInfoAfterRefresh->getVersion();
         } else {
             log() << "Refresh for collection " << nss << " took " << t.millis()
@@ -438,7 +438,7 @@ void CatalogCache::_scheduleCollectionRefresh(WithLock lk,
     const ChunkVersion startingCollectionVersion =
         (existingRoutingInfo ? existingRoutingInfo->getVersion() : ChunkVersion::UNSHARDED());
 
-    log() << "Refreshing chunks for collection " << nss << " based on version "
+    LOG(1) << "Refreshing chunks for collection " << nss << " based on version "
           << startingCollectionVersion;
 
     try {
